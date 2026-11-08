@@ -8,6 +8,7 @@
     <RootNamespace>UpSnapTray</RootNamespace>
     <AssemblyName>UpSnapTray</AssemblyName>
     <Version>1.1.0</Version>
+    <ApplicationIcon>..\assets\icon-dark.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
   <ItemGroup>
