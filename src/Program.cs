@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -37,27 +39,50 @@ internal static class Log
 }
 
 // Settings live outside the repository: %APPDATA%\UpSnapTray\settings.json
-// { "url": "http://192.168.1.10:8090" }
+// { "url": "http://192.168.1.10:8090", "lang": "en" }
 internal static class Settings
 {
     private static readonly string FilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UpSnapTray", "settings.json");
 
-    public static string Url { get; } = Load();
+    public static string Url { get; private set; } = "http://localhost:8090";
+    public static string Lang { get; private set; } = DefaultLang();
 
-    private static string Load()
+    static Settings()
+    {
+        Load();
+    }
+
+    private static string DefaultLang()
+    {
+        var two = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        return string.Equals(two, "zh", StringComparison.OrdinalIgnoreCase) ? "zh" : "en";
+    }
+
+    private static void Load()
     {
         try
         {
-            if (File.Exists(FilePath))
+            if (!File.Exists(FilePath))
             {
-                using var doc = JsonDocument.Parse(File.ReadAllText(FilePath));
-                if (doc.RootElement.TryGetProperty("url", out var value) && value.ValueKind == JsonValueKind.String)
+                return;
+            }
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(FilePath));
+            if (doc.RootElement.TryGetProperty("url", out var urlValue) && urlValue.ValueKind == JsonValueKind.String)
+            {
+                var url = urlValue.GetString();
+                if (!string.IsNullOrWhiteSpace(url))
                 {
-                    var url = value.GetString();
-                    if (!string.IsNullOrWhiteSpace(url))
-                    {
-                        return url.TrimEnd('/');
-                    }
+                    Url = url.TrimEnd('/');
+                }
+            }
+
+            if (doc.RootElement.TryGetProperty("lang", out var langValue) && langValue.ValueKind == JsonValueKind.String)
+            {
+                var lang = langValue.GetString();
+                if (lang is "zh" or "en")
+                {
+                    Lang = lang;
                 }
             }
         }
@@ -65,8 +90,57 @@ internal static class Settings
         {
             Log.Write("settings read failed: " + ex.Message);
         }
+    }
 
-        return "http://localhost:8090";
+    public static void SetLang(string lang)
+    {
+        if (lang is not ("zh" or "en"))
+        {
+            return;
+        }
+
+        Lang = lang;
+        Save();
+    }
+
+    private static void Save()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+            var json = "{\n  \"url\": \"" + Url + "\",\n  \"lang\": \"" + Lang + "\"\n}";
+            File.WriteAllText(FilePath, json);
+        }
+        catch (Exception ex)
+        {
+            Log.Write("settings write failed: " + ex.Message);
+        }
+    }
+}
+
+internal static class Loc
+{
+    private static readonly Dictionary<string, (string Zh, string En)> Map = new()
+    {
+        ["panel"] = ("打开面板", "Open panel"),
+        ["browser"] = ("在浏览器打开", "Open in browser"),
+        ["reload"] = ("刷新", "Reload"),
+        ["autostart"] = ("开机启动", "Start with Windows"),
+        ["exit"] = ("退出", "Exit"),
+        ["language"] = ("语言", "Language"),
+        ["zh"] = ("中文", "中文"),
+        ["en"] = ("English", "English"),
+        ["webviewFail"] = ("WebView2 初始化失败", "WebView2 failed to initialize"),
+    };
+
+    public static string T(string key)
+    {
+        if (!Map.TryGetValue(key, out var value))
+        {
+            return key;
+        }
+
+        return Settings.Lang == "zh" ? value.Zh : value.En;
     }
 }
 
@@ -97,31 +171,56 @@ internal sealed class TrayApp : ApplicationContext
 
     private readonly NotifyIcon _tray;
     private readonly ContextMenuStrip _menu;
+    private readonly ToolStripMenuItem _panelItem;
+    private readonly ToolStripMenuItem _browserItem;
+    private readonly ToolStripMenuItem _reloadItem;
     private readonly ToolStripMenuItem _autoItem;
+    private readonly ToolStripMenuItem _exitItem;
+    private readonly ToolStripMenuItem _langMenu;
+    private readonly ToolStripMenuItem _zhItem;
+    private readonly ToolStripMenuItem _enItem;
     private PopupForm? _popup;
     private DateTime _lastHide = DateTime.MinValue;
 
     public TrayApp(bool selftest)
     {
-        Log.Write("start exe=" + Application.ExecutablePath + " selftest=" + selftest + " url=" + Settings.Url);
+        Log.Write("start exe=" + Application.ExecutablePath + " selftest=" + selftest + " url=" + Settings.Url + " lang=" + Settings.Lang);
 
         _tray = new NotifyIcon
         {
             Icon = LoadTrayIcon(),
-            Text = "UpSnap",
+            Text = "UpSnapTray",
             Visible = true,
         };
 
         _menu = new ContextMenuStrip();
-        _menu.Items.Add("打开面板", null, (_, _) => ShowPopup());
-        _menu.Items.Add("在浏览器打开", null, (_, _) => OpenInBrowser());
-        _menu.Items.Add("刷新", null, (_, _) => _popup?.Reload());
-        _menu.Items.Add(new ToolStripSeparator());
-        _autoItem = new ToolStripMenuItem("开机启动") { CheckOnClick = true, Checked = IsAutostartEnabled() };
+        _panelItem = new ToolStripMenuItem(Loc.T("panel"));
+        _panelItem.Click += (_, _) => ShowPopup();
+        _browserItem = new ToolStripMenuItem(Loc.T("browser"));
+        _browserItem.Click += (_, _) => OpenInBrowser();
+        _reloadItem = new ToolStripMenuItem(Loc.T("reload"));
+        _reloadItem.Click += (_, _) => _popup?.Reload();
+        _autoItem = new ToolStripMenuItem(Loc.T("autostart")) { CheckOnClick = true, Checked = IsAutostartEnabled() };
         _autoItem.Click += (_, _) => SetAutostart(_autoItem.Checked);
-        _menu.Items.Add(_autoItem);
+        _exitItem = new ToolStripMenuItem(Loc.T("exit"));
+        _exitItem.Click += (_, _) => Shutdown();
+
+        _zhItem = new ToolStripMenuItem(Loc.T("zh")) { Checked = Settings.Lang == "zh" };
+        _zhItem.Click += (_, _) => SwitchLanguage("zh");
+        _enItem = new ToolStripMenuItem(Loc.T("en")) { Checked = Settings.Lang == "en" };
+        _enItem.Click += (_, _) => SwitchLanguage("en");
+        _langMenu = new ToolStripMenuItem(Loc.T("language"));
+        _langMenu.DropDownItems.Add(_zhItem);
+        _langMenu.DropDownItems.Add(_enItem);
+
+        _menu.Items.Add(_panelItem);
+        _menu.Items.Add(_browserItem);
+        _menu.Items.Add(_reloadItem);
         _menu.Items.Add(new ToolStripSeparator());
-        _menu.Items.Add("退出", null, (_, _) => Shutdown());
+        _menu.Items.Add(_autoItem);
+        _menu.Items.Add(_langMenu);
+        _menu.Items.Add(new ToolStripSeparator());
+        _menu.Items.Add(_exitItem);
         _tray.ContextMenuStrip = _menu;
 
         _tray.MouseClick += (_, e) =>
@@ -154,11 +253,32 @@ internal sealed class TrayApp : ApplicationContext
             timer.Tick += (_, _) =>
             {
                 timer.Stop();
-                Log.Write("SELFTEST done navOk=" + (_popup?.NavigationSucceeded == true));
+                Log.Write("SELFTEST done navOk=" + (_popup?.NavigationSucceeded == true) + " lang=" + Settings.Lang);
                 Shutdown();
             };
             timer.Start();
         }
+    }
+
+    private void SwitchLanguage(string lang)
+    {
+        Settings.SetLang(lang);
+        ApplyLanguage();
+        Log.Write("lang -> " + lang);
+    }
+
+    private void ApplyLanguage()
+    {
+        _panelItem.Text = Loc.T("panel");
+        _browserItem.Text = Loc.T("browser");
+        _reloadItem.Text = Loc.T("reload");
+        _autoItem.Text = Loc.T("autostart");
+        _exitItem.Text = Loc.T("exit");
+        _langMenu.Text = Loc.T("language");
+        _zhItem.Text = Loc.T("zh");
+        _enItem.Text = Loc.T("en");
+        _zhItem.Checked = Settings.Lang == "zh";
+        _enItem.Checked = Settings.Lang == "en";
     }
 
     private void TogglePopup()
@@ -358,7 +478,7 @@ internal sealed class PopupForm : Form
             Controls.Clear();
             Controls.Add(new Label
             {
-                Text = "WebView2 初始化失败\r\n\r\n" + ex.Message,
+                Text = Loc.T("webviewFail") + "\r\n\r\n" + ex.Message,
                 Dock = DockStyle.Fill,
                 ForeColor = Color.White,
                 BackColor = Color.FromArgb(70, 24, 24),

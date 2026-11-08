@@ -12,7 +12,8 @@ An unofficial Windows system-tray client for [UpSnap](https://github.com/serious
 - Panel hides automatically when it loses focus (like a native flyout); `Esc` also hides it
 - Persistent login: the WebView2 user-data folder keeps your UpSnap session
 - Auto-start on login (enabled by default on first run, toggleable)
-- Right-click menu: open panel / open in browser / reload / auto-start / exit
+- English / 中文 UI — follows the Windows display language, switchable from the tray menu (persisted as `lang` in `settings.json`)
+- Right-click menu: open panel / open in browser / reload / auto-start / language / exit
 - Single instance, tiny footprint, no installer
 
 ## Requirements
@@ -42,9 +43,12 @@ Create `%APPDATA%\UpSnapTray\settings.json`:
 
 ```json
 {
-  "url": "http://192.168.1.10:8090"
+  "url": "http://192.168.1.10:8090",
+  "lang": "en"
 }
 ```
+
+`url` is the only required key (`lang` is optional: `en` or `zh`). When `lang` is absent the UI follows the Windows display language; picking a language in the tray menu writes it back here.
 
 Default when the file is absent: `http://localhost:8090`.
 
