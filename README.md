@@ -15,6 +15,7 @@ An unofficial Windows system-tray client for [UpSnap](https://github.com/serious
 - Persistent login: the WebView2 user-data folder keeps your UpSnap session
 - Auto-start on login (enabled by default on first run, toggleable)
 - English / 中文 UI — follows the Windows display language, switchable from the tray menu (persisted as `lang` in `settings.json`)
+- Theme-aware tray icon: separate light/dark variants (16–256 px ICO), picked from the Windows app theme
 - Right-click menu: open panel / open in browser / reload / auto-start / language / exit
 - Single instance, tiny footprint, no installer
 

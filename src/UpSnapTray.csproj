@@ -13,4 +13,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\assets\icon-dark.ico" Link="assets\icon-dark.ico" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\assets\icon-light.ico" Link="assets\icon-light.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

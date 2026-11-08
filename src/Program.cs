@@ -181,6 +181,7 @@ internal sealed class TrayApp : ApplicationContext
     private readonly ToolStripMenuItem _enItem;
     private PopupForm? _popup;
     private DateTime _lastHide = DateTime.MinValue;
+    private bool _lightTaskbar = IsLightTaskbar();
 
     public TrayApp(bool selftest)
     {
@@ -307,6 +308,7 @@ internal sealed class TrayApp : ApplicationContext
 
     private void ShowPopup()
     {
+        RefreshIcon();
         if (_popup is null || _popup.IsDisposed)
         {
             _popup = new PopupForm();
@@ -363,7 +365,53 @@ internal sealed class TrayApp : ApplicationContext
         }
     }
 
+    private static bool IsLightTaskbar()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return key?.GetValue("SystemUsesLightTheme") is int value && value == 1;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void RefreshIcon()
+    {
+        var light = IsLightTaskbar();
+        if (light == _lightTaskbar)
+        {
+            return;
+        }
+
+        _lightTaskbar = light;
+        _tray.Icon = LoadTrayIcon();
+        Log.Write("theme -> " + (light ? "light" : "dark"));
+    }
+
     private static Icon LoadTrayIcon()
+    {
+        try
+        {
+            var file = IsLightTaskbar() ? "icon-light.ico" : "icon-dark.ico";
+            var asset = Path.Combine(AppContext.BaseDirectory, "assets", file);
+            if (File.Exists(asset))
+            {
+                Log.Write("icon asset: " + file);
+                return new Icon(asset);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Write("icon asset failed: " + ex.Message);
+        }
+
+        return DrawFallbackIcon();
+    }
+
+    private static Icon DrawFallbackIcon()
     {
         try
         {
