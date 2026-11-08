@@ -2,6 +2,8 @@
 
 An unofficial Windows system-tray client for [UpSnap](https://github.com/seriousm4x/UpSnap) — click the tray icon and a compact panel opens with your UpSnap dashboard, no browser tab required.
 
+![UpSnapTray panel](docs/screenshot.png)
+
 ![platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4)
 ![license](https://img.shields.io/badge/license-MIT-green)

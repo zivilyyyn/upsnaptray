@@ -249,7 +249,14 @@ internal sealed class TrayApp : ApplicationContext
         if (selftest)
         {
             ShowPopup();
-            var timer = new System.Windows.Forms.Timer { Interval = 12000 };
+            var seconds = 12;
+            var envSeconds = Environment.GetEnvironmentVariable("UPSNAPTRAY_SELFTEST_SEC");
+            if (int.TryParse(envSeconds, out var parsed) && parsed > 0 && parsed <= 600)
+            {
+                seconds = parsed;
+            }
+
+            var timer = new System.Windows.Forms.Timer { Interval = seconds * 1000 };
             timer.Tick += (_, _) =>
             {
                 timer.Stop();
